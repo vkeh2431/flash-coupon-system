@@ -52,4 +52,13 @@ public class Campaign {
         this.remainingQuantity = totalQuantity;
         this.paused = false;
     }
+
+    public boolean tryDecreaseStock() {
+        if(this.remainingQuantity <= 0) {
+            return false;
+        } else {
+            this.remainingQuantity -= 1;
+            return true;
+        }
+    }
 }
