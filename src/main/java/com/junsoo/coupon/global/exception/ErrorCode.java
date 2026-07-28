@@ -1,0 +1,25 @@
+package com.junsoo.coupon.global.exception;
+
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+
+@Getter
+@RequiredArgsConstructor
+public enum ErrorCode {
+    RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "요청한 리소스를 찾을 수 없습니다."),
+    VALIDATION_ERROR(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "입력값 검증에 실패했습니다."),
+    CAMPAIGN_NOT_OPENED(HttpStatus.CONFLICT, "CAMPAIGN_NOT_OPENED", "캠페인이 아직 열리지 않았습니다."),
+    CAMPAIGN_CLOSED(HttpStatus.CONFLICT, "CAMPAIGN_CLOSED", "캠페인이 종료되었습니다."),
+    CAMPAIGN_PAUSED(HttpStatus.CONFLICT, "CAMPAIGN_PAUSED", "캠페인이 중단되었습니다."),
+    CAMPAIGN_OUT_OF_STOCK (HttpStatus.CONFLICT, "CAMPAIGN_OUT_OF_STOCK", "캠페인의 쿠폰이 전부 소진되었습니다."),
+    COUPON_ALREADY_ISSUED (HttpStatus.CONFLICT, "COUPON_ALREADY_ISSUED", "캠페인의 쿠폰을 이미 발급받았습니다."),
+
+    EMAIL_ALREADY_IN_USE(HttpStatus.CONFLICT, "EMAIL_ALREADY_IN_USE", "해당 이메일은 이미 사용중입니다.");
+
+
+
+    private final HttpStatus status;
+    private final String code;
+    private final String defaultMessage;
+}
