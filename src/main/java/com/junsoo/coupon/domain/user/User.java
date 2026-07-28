@@ -32,7 +32,7 @@ public class User {
     public User(String email, String password, Role role) {
         this.email = email;
         this.password = password;
-        this.role = (role == null) ? Role.USER : role;
+        this.role = role;
         this.createdAt = LocalDateTime.now();
     }
 }
