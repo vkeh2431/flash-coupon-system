@@ -34,4 +34,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(errorCode.getStatus())
                 .body(ErrorResponse.of(errorCode, errorCode.getDefaultMessage(), fieldErrors));
     }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgumentException(IllegalArgumentException e) {
+        ErrorCode errorCode = ErrorCode.VALIDATION_ERROR;
+
+        return ResponseEntity.status(errorCode.getStatus())
+                .body(ErrorResponse.of(errorCode, e.getMessage()));
+    }
 }
