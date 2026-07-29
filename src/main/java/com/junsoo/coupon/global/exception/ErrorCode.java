@@ -14,7 +14,9 @@ public enum ErrorCode {
     CAMPAIGN_PAUSED(HttpStatus.CONFLICT, "CAMPAIGN_PAUSED", "캠페인이 중단되었습니다."),
     CAMPAIGN_OUT_OF_STOCK (HttpStatus.CONFLICT, "CAMPAIGN_OUT_OF_STOCK", "캠페인의 쿠폰이 전부 소진되었습니다."),
     COUPON_ALREADY_ISSUED (HttpStatus.CONFLICT, "COUPON_ALREADY_ISSUED", "캠페인의 쿠폰을 이미 발급받았습니다."),
-
+    UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "인증이 필요합니다."),
+    INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "이메일 또는 비밀번호가 틀렸습니다."),
+    FORBIDDEN(HttpStatus.FORBIDDEN, "FORBIDDEN", "권한이 없습니다."),
     EMAIL_ALREADY_IN_USE(HttpStatus.CONFLICT, "EMAIL_ALREADY_IN_USE", "해당 이메일은 이미 사용중입니다.");
 
 
