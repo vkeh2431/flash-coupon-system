@@ -2,10 +2,10 @@ package com.junsoo.coupon.domain.coupon;
 
 import com.junsoo.coupon.domain.campaign.Campaign;
 import com.junsoo.coupon.domain.campaign.CampaignRepository;
-import com.junsoo.coupon.domain.user.Role;
 import com.junsoo.coupon.domain.user.User;
 import com.junsoo.coupon.domain.user.UserRepository;
 import com.junsoo.coupon.dto.coupon.CouponResponse;
+import com.junsoo.coupon.dto.coupon.MyCouponResponse;
 import com.junsoo.coupon.global.exception.BusinessException;
 import com.junsoo.coupon.global.exception.ErrorCode;
 import com.junsoo.coupon.global.exception.ResourceNotFoundException;
@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 
 @Slf4j
@@ -58,5 +59,10 @@ public class CouponService {
         couponRepository.save(coupon);
 
         return CouponResponse.from(coupon);
+    }
+
+    public List<MyCouponResponse> findAvailableCoupons(Long userId) {
+        List<Coupon> coupons = couponRepository.findAvailableByUserId(userId, Status.ISSUED);
+        return coupons.stream().map(MyCouponResponse::from).toList();
     }
 }
