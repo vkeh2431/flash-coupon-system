@@ -3,9 +3,11 @@ package com.junsoo.coupon.domain.campaign;
 import com.junsoo.coupon.domain.coupon.CouponService;
 import com.junsoo.coupon.dto.campaign.CampaignResponse;
 import com.junsoo.coupon.dto.coupon.CouponResponse;
+import com.junsoo.coupon.global.security.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,9 +22,9 @@ public class CampaignController {
     @PostMapping("/{campaignId}/coupons")
     public ResponseEntity<CouponResponse> issue(
             @PathVariable Long campaignId,
-            @RequestParam Long userId
+            @AuthenticationPrincipal CustomUserDetails principal
             ) {
-        CouponResponse response = couponService.issue(campaignId, userId);
+        CouponResponse response = couponService.issue(campaignId, principal.getUserId());
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
