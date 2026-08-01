@@ -43,6 +43,14 @@ public class Coupon {
 
     private LocalDateTime redeemedAt;
 
+    public boolean isExpired() {
+        return this.expiresAt.isBefore(LocalDateTime.now());
+    }
+
+    public void redeem() {
+        this.redeemedAt = LocalDateTime.now();
+        this.status = Status.REDEEMED;
+    }
 
     public Coupon(User user, Campaign campaign) {
         this.user = user;
