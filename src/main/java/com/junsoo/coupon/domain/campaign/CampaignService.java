@@ -54,4 +54,20 @@ public class CampaignService {
                 .toList();
     }
 
+    @Transactional
+    public AdminCampaignResponse pause(Long campaignId) {
+        Campaign campaign = campaignRepository.findById(campaignId)
+                .orElseThrow(() -> new ResourceNotFoundException("Campaign", campaignId));
+        campaign.pause();
+        return  AdminCampaignResponse.from(campaign);
+    }
+
+    @Transactional
+    public AdminCampaignResponse resume(Long campaignId) {
+        Campaign campaign = campaignRepository.findById(campaignId)
+                .orElseThrow(() -> new ResourceNotFoundException("Campaign", campaignId));
+        campaign.resume();
+        return  AdminCampaignResponse.from(campaign);
+    }
+
 }
