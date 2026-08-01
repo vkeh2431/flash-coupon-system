@@ -61,4 +61,12 @@ public class Campaign {
             return true;
         }
     }
+
+    public void pause() {
+        this.paused = true;
+    }
+
+    public void resume() {
+        this.paused = false;
+    }
 }
