@@ -65,4 +65,18 @@ public class CouponService {
         List<Coupon> coupons = couponRepository.findAvailableByUserId(userId, Status.ISSUED);
         return coupons.stream().map(MyCouponResponse::from).toList();
     }
+
+    @Transactional
+    public CouponResponse redeem(Long userId, Long couponId) {
+        Coupon coupon = couponRepository.findByIdAndUserId(couponId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "쿠폰 조회 실패: couponID: " + couponId + ", userId: " + userId));
+
+        if(coupon.getStatus().equals(Status.REDEEMED)) throw new BusinessException(ErrorCode.COUPON_ALREADY_REDEEMED);
+        if(coupon.getStatus().equals(Status.REVOKED)) throw new BusinessException(ErrorCode.COUPON_REVOKED);
+        if(coupon.isExpired()) throw new BusinessException(ErrorCode.COUPON_EXPIRED);
+
+        coupon.redeem();
+
+        return CouponResponse.from(coupon);
+    }
 }
