@@ -1,9 +1,6 @@
 package com.junsoo.coupon.dto.campaign;
 
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.*;
 
 import java.time.LocalDateTime;
 
@@ -19,7 +16,8 @@ public record CampaignCreateRequest(
     @NotNull
     LocalDateTime closesAt,
 
-    @Min(value = 1, message = "수량은 최소 1 이상이어야 합니다.")
+    @Min(value = 100, message = "수량은 100 이상이어야 합니다.")
+    @Max(value = 10000, message = "수량은 10000 이하이어야 합니다.")
     int totalQuantity
 ) {
 }
