@@ -1,0 +1,40 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: coupon
+      MYSQL_USER: coupon
+      MYSQL_PASSWORD: coupon
+    volumes:
+      - mysql-data:/var/lib/mysql        # named volume — WSL2에서 bind mount는 I/O가 느리다
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot" ]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+
+  app:
+    build: .
+    depends_on:
+      mysql:
+        condition: service_healthy       # 이거 없으면 앱이 DB보다 먼저 떠서 죽는다
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/coupon
+      DB_USERNAME: coupon
+      DB_PASSWORD: coupon
+      SPRING_PROFILES_ACTIVE: load
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75"
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+
+volumes:
+  mysql-data:
