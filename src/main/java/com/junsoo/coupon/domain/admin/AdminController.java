@@ -5,7 +5,6 @@ import com.junsoo.coupon.domain.campaign.CampaignService;
 import com.junsoo.coupon.dto.campaign.AdminCampaignResponse;
 import com.junsoo.coupon.dto.campaign.CampaignCreateRequest;
 import com.junsoo.coupon.dto.campaign.CampaignResponse;
-import com.junsoo.coupon.global.security.CustomUserDetails;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;

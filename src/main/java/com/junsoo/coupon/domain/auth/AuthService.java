@@ -13,6 +13,7 @@ import com.junsoo.coupon.global.exception.ErrorCode;
 import com.junsoo.coupon.global.exception.ResourceNotFoundException;
 import com.junsoo.coupon.global.security.CustomUserDetails;
 import com.junsoo.coupon.global.security.JwtProvider;
+import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -30,7 +31,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private static final String GRANT_TYPE = "Bearer";
-    private static final String TYPE_REFRESH = "refresh";
 
     private final AuthenticationManager authenticationManager;
     private final UserRepository userRepository;
@@ -62,11 +62,18 @@ public class AuthService {
     }
 
     public TokenResponse refresh(String refreshToken) {
-        if (!jwtProvider.validate(refreshToken) || !TYPE_REFRESH.equals(jwtProvider.getType(refreshToken))) {
+        Claims claims = jwtProvider.parseOrNull(refreshToken);
+        if (claims == null || !jwtProvider.isRefreshToken(claims)) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
 
-        Long userId = jwtProvider.getUserId(refreshToken);
+        Long userId = jwtProvider.getUserId(claims);
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+
+        // 재발급은 드문 경로이므로 여기서는 DB에서 최신 role을 읽는다.
+        // 발급 경로(JwtAuthenticationFilter)와 달리 요청당 비용이 문제되지 않는다.
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
 

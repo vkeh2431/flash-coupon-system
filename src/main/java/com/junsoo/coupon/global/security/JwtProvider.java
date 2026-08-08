@@ -17,6 +17,8 @@ public class JwtProvider {
 
     private static final String TYPE_ACCESS = "access";
     private static final String TYPE_REFRESH = "refresh";
+    private static final String CLAIM_TYPE = "type";
+    private static final String CLAIM_ROLE = "role";
 
     private final SecretKey key;
     private final long accessTokenValidity;
@@ -40,34 +42,51 @@ public class JwtProvider {
         Instant now = Instant.now();
         var builder = Jwts.builder()
                 .subject(String.valueOf(userId))
-                .claim("type", type)
+                .claim(CLAIM_TYPE, type)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusMillis(validityMs)))
                 .signWith(key);
         if(role != null) {
-            builder.claim("role", role);
+            builder.claim(CLAIM_ROLE, role);
         }
         return builder.compact();
     }
 
-    public boolean validate(String token) {
+
+    // 서명 검증과 클레임 파싱을 한 번에 수행한다.
+    public Claims parseOrNull(String token) {
         try {
-            Jwts.parser().verifyWith(key).build().parseSignedClaims(token);
-            return true;
+            return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
         } catch (JwtException | IllegalArgumentException e) {
-            return false;
+            return null;
         }
     }
 
-    public Long getUserId(String token) { return Long.valueOf(parse(token).getSubject());}
-
-    public String getRole(String token) { return parse(token).get("role", String.class);}
-
-    public String getType(String token) { return parse(token).get("type", String.class);}
-
-    private Claims parse(String token) {
-        return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
+    public boolean isAccessToken(Claims claims) {
+        return TYPE_ACCESS.equals(claims.get(CLAIM_TYPE, String.class));
     }
 
+    public boolean isRefreshToken(Claims claims) {
+        return TYPE_REFRESH.equals(claims.get(CLAIM_TYPE, String.class));
+    }
 
+    public Long getUserId(Claims claims) {
+        try {
+            return Long.valueOf(claims.getSubject());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    public Role getRole(Claims claims) {
+        String role = claims.get(CLAIM_ROLE, String.class);
+        if (role == null) {
+            return null;
+        }
+        try {
+            return Role.valueOf(role);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
 }

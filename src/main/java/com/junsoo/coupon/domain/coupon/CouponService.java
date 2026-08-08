@@ -52,9 +52,7 @@ public class CouponService {
             throw new BusinessException(ErrorCode.CAMPAIGN_OUT_OF_STOCK);
         }
 
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+        User user = userRepository.getReferenceById(userId);
         Coupon coupon = new Coupon(user, campaign);
         couponRepository.save(coupon);
 
