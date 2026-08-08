@@ -6,6 +6,10 @@ services:
       MYSQL_DATABASE: coupon
       MYSQL_USER: coupon
       MYSQL_PASSWORD: coupon
+    # ⓪ 캘리브레이션 전용: sysbench 클라이언트(MariaDB 기반)가 caching_sha2_password를
+    # 지원하지 않아 구형 인증 플러그인을 켠다. 인증 방식일 뿐 쓰기 성능과는 무관하며,
+    # 앱 계정(coupon)은 기본값(caching_sha2_password)을 그대로 쓴다.
+    command: --mysql-native-password=ON
     volumes:
       - mysql-data:/var/lib/mysql        # named volume — WSL2에서 bind mount는 I/O가 느리다
     healthcheck:
@@ -16,7 +20,9 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1.0"
+          # ⓪ 캘리브레이션 확정값 (2026-08-08). C1 = 2,084 INSERT/s.
+          # 유입 대비 DB 처리율 격차를 만드는 값이라 10회 측정 내내 고정.
+          cpus: "0.5"
 
   app:
     build: .
@@ -29,12 +35,48 @@ services:
       DB_PASSWORD: coupon
       SPRING_PROFILES_ACTIVE: load
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75"
+      # 측정 고정 조건: DB를 동시에 때리는 요청 수의 실질적 상한 = 락 경합 강도를 결정한다.
+      # 10 / 30 / 60 비교 결과 처리량 차이 없음(915·895·864 rps) — 병목은 풀이 아니라 MySQL CPU였다.
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
     ports:
       - "8080:8080"
     deploy:
       resources:
         limits:
+          # ⓪ 확정값. 3.0으로 올리면 C3'가 7,500이 되어 k6가 과부하를 만들 수 없다.
           cpus: "2.0"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"                 # 싱글스레드. 병목이 아님을 확인하는 용도(C2)
+
+  nginx:
+    image: nginx:1.27-alpine
+    profiles: [ "calibration" ]
+    ports:
+      - "8081:80"                    # curl로 직접 확인용
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"                # k6의 2배 — 병목이 되면 C0가 아니라 nginx 천장을 재게 된다
+
+  k6:
+    image: grafana/k6:latest
+    profiles: [ "calibration" ]
+    depends_on:
+      - nginx
+    volumes:
+      - ./k6:/scripts
+    command: run /scripts/c0.js
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"                # 본 측정과 동일한 몫이어야 C0가 의미를 갖는다
 
 volumes:
   mysql-data:

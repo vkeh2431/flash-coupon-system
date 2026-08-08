@@ -4,3 +4,4 @@ bin
 .idea
 .git
 *.md
+k6
