@@ -7,12 +7,15 @@ import org.testcontainers.mysql.MySQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 @TestConfiguration(proxyBeanMethods = false)
-class TestcontainersConfiguration {
+public class TestcontainersConfiguration {
+
+	// docker-compose.yaml과 동일한 버전으로 고정한다.
+	private static final String MYSQL_IMAGE = "mysql:8.4";
 
 	@Bean
 	@ServiceConnection
 	MySQLContainer mysqlContainer() {
-		return new MySQLContainer(DockerImageName.parse("mysql:latest"));
+		return new MySQLContainer(DockerImageName.parse(MYSQL_IMAGE));
 	}
 
 }

@@ -46,4 +46,6 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	// test는 별도 JVM에서 돌기 때문에 gradle 커맨드라인의 -D가 자동으로 전달되지 않는다.
+	systemProperty 'threads', System.getProperty('threads', '2')
 }
