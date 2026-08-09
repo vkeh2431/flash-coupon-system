@@ -23,7 +23,9 @@ public enum ErrorCode {
     COUPON_EXPIRED(HttpStatus.CONFLICT, "COUPON_EXPIRED", "유효기간이 지난 쿠폰입니다"),
 
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "이메일 또는 비밀번호가 틀렸습니다"),
-    EMAIL_ALREADY_IN_USE(HttpStatus.CONFLICT, "EMAIL_ALREADY_IN_USE", "해당 이메일은 이미 사용중입니다");
+    EMAIL_ALREADY_IN_USE(HttpStatus.CONFLICT, "EMAIL_ALREADY_IN_USE", "해당 이메일은 이미 사용중입니다"),
+
+    DB_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "DB_ERROR", "요청을 처리하지 못했습니다");
 
 
 
