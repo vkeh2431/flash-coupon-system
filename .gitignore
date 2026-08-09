@@ -38,3 +38,4 @@ out/
 
 ### 부하 측정 산출물 ###
 k6/tokens.txt
+k6/results/

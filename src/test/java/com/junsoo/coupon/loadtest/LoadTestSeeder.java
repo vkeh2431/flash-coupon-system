@@ -98,8 +98,9 @@ public final class LoadTestSeeder {
         }
         try (BufferedWriter writer = Files.newBufferedWriter(out, StandardCharsets.UTF_8)) {
             for (Long userId : userIds) {
+                // newLine()은 Windows에서 \r\n을 쓴다. \r이 남으면 HTTP 헤더 값으로 못 쓴다.
                 writer.write(jwtProvider.createAccessToken(userId, Role.USER));
-                writer.newLine();
+                writer.write('\n');
             }
         }
         System.out.printf("토큰 %,d개 생성 (만료 %d일)%n", userIds.size(), Duration.ofMillis(validityMs).toDays());
