@@ -36,7 +36,8 @@ services:
       DB_USERNAME: coupon
       DB_PASSWORD: coupon
       SPRING_PROFILES_ACTIVE: load
-      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75"
+      # 고정 측정 조건 (2026-08-09). Xms=Xmx로 실행 중 힙 리사이징도 막는다.
+      JAVA_TOOL_OPTIONS: "-Xms2g -Xmx2g"
       # 측정 고정 조건: DB를 동시에 때리는 요청 수의 실질적 상한 = 락 경합 강도를 결정한다.
       # 10 / 30 / 60 비교 결과 처리량 차이 없음(915·895·864 rps) — 병목은 풀이 아니라 MySQL CPU였다.
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "10"
@@ -57,6 +58,34 @@ services:
         limits:
           cpus: "0.5"                 # 싱글스레드. 병목이 아님을 확인하는 용도(C2)
 
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    depends_on:
+      - prometheus
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./monitoring/grafana:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+
   nginx:
     image: nginx:1.27-alpine
     profiles: [ "calibration" ]
@@ -69,9 +98,8 @@ services:
 
   k6:
     image: grafana/k6:latest
-    profiles: [ "calibration" ]
-    depends_on:
-      - nginx
+    profiles: [ "calibration", "load" ]
+    # depends_on을 두지 않는다 — 대상이 프로파일마다 다르다(캘리브레이션은 nginx, 본 측정은 app).
     volumes:
       - ./k6:/scripts
     command: run /scripts/c0.js

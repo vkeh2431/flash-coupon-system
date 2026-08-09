@@ -1,0 +1,10 @@
+global:
+  # 고정 측정 조건 (2026-08-09).
+  scrape_interval: 1s
+  scrape_timeout: 1s
+
+scrape_configs:
+  - job_name: coupon-app
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: [ 'app:8080' ]

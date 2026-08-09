@@ -34,7 +34,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/prometheus").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/campaigns/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/admin/**").hasRole("ADMIN")

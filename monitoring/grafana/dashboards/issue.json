@@ -1,0 +1,79 @@
+{
+  "uid": "coupon-issue",
+  "title": "선착순 발급 — 측정",
+  "timezone": "browser",
+  "refresh": "5s",
+  "time": { "from": "now-5m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "서버 측 처리량 (상태코드별)",
+      "description": "k6가 포기한 요청도 여기에는 잡힌다. 201=발급, 409=거절, 500=DB 예외",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "fillOpacity": 15 } }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (rate(http_server_requests_seconds_count{uri=\"/campaigns/{campaignId}/coupons\"}[5s]))",
+          "legendFormat": "{{status}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "서버 측 응답시간 (p50 / p95 / p99)",
+      "description": "Tomcat 스레드가 요청을 잡은 뒤의 시간. 커넥터 대기열에서 기다린 시간은 빠져 있다",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_requests_seconds_bucket{uri=\"/campaigns/{campaignId}/coupons\"}[5s])))",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{uri=\"/campaigns/{campaignId}/coupons\"}[5s])))",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "C",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{uri=\"/campaigns/{campaignId}/coupons\"}[5s])))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "커넥션 풀 — 대기가 곧 병목의 증거",
+      "description": "pending이 쌓이면 풀이 병목이다. active가 max에 안 닿는데 느리면 원인은 다른 곳",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "hikaricp_connections_active", "legendFormat": "active" },
+        { "refId": "B", "expr": "hikaricp_connections_pending", "legendFormat": "pending (풀 대기)" },
+        { "refId": "C", "expr": "hikaricp_connections_max", "legendFormat": "max" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "DB 예외 (누적)",
+      "description": "v0의 주력 실패 모드. v1에서 0이 되는지 대조할 값",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (type) (coupon_db_errors_total)",
+          "legendFormat": "{{type}}"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "version": 1
+}
