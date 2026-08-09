@@ -49,3 +49,16 @@ tasks.named('test') {
 	// test는 별도 JVM에서 돌기 때문에 gradle 커맨드라인의 -D가 자동으로 전달되지 않는다.
 	systemProperty 'threads', System.getProperty('threads', '2')
 }
+
+// 부하 측정용 유저 풀 + 토큰 파일 생성. 측정 전에 한 번만 돌린다.
+tasks.register('seedLoadTest', JavaExec) {
+	group = 'load test'
+	description = '부하 측정용 유저와 토큰 파일을 만든다 (기본 30,000명)'
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.junsoo.coupon.loadtest.LoadTestSeeder'
+	['users', 'db.url', 'db.username', 'db.password', 'jwt.secret', 'token.validity.days', 'out'].each { key ->
+		if (System.getProperty(key) != null) {
+			systemProperty key, System.getProperty(key)
+		}
+	}
+}
