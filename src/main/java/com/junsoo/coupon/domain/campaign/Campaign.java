@@ -31,9 +31,6 @@ public class Campaign {
 
     private boolean paused;
 
-    @Version
-    private Long version;
-
     public Campaign(
             String name,
             LocalDateTime opensAt,

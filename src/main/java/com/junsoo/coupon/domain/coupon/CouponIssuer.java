@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
-// 자기 호출로는 @Transactional 프록시를 타지 않아 별도 빈으로 분리했다.
+// 락 바깥 / 트랜잭션 안쪽 경계를 나누려고 별도 빈으로 뒀다.
 @Component
 @RequiredArgsConstructor
 public class CouponIssuer {
@@ -53,10 +53,6 @@ public class CouponIssuer {
         if(!campaign.tryDecreaseStock()) {
             throw new BusinessException(ErrorCode.CAMPAIGN_OUT_OF_STOCK);
         }
-
-        // 재고 UPDATE를 쿠폰 INSERT보다 먼저 내보낸다. 순서가 반대면 INSERT의 FK가
-        // 캠페인 행에 S락을 걸고 뒤따르는 UPDATE가 X락으로 승격하면서 데드락이 난다.
-        campaignRepository.saveAndFlush(campaign);
 
         User user = userRepository.getReferenceById(userId);
         Coupon coupon = new Coupon(user, campaign);

@@ -5,15 +5,17 @@ import com.junsoo.coupon.dto.coupon.MyCouponResponse;
 import com.junsoo.coupon.global.exception.BusinessException;
 import com.junsoo.coupon.global.exception.ErrorCode;
 import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.OptimisticLockingFailureException;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 
 @Slf4j
@@ -21,42 +23,56 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class CouponService {
 
-    private static final int MAX_ATTEMPTS = 50;
+    private static final String LOCK_KEY_PREFIX = "lock:campaign:";
+    private static final long LOCK_WAIT_SECONDS = 10;
 
     private final CouponRepository couponRepository;
     private final CouponIssuer couponIssuer;
+    private final RedissonClient redissonClient;
 
-    private final Counter retries;
-    private final Counter retryExhausted;
-    private final DistributionSummary attemptsUntilSuccess;
+    private final Timer lockWait;
+    private final Counter lockTimeouts;
 
     public CouponService(CouponRepository couponRepository,
                          CouponIssuer couponIssuer,
+                         RedissonClient redissonClient,
                          MeterRegistry meterRegistry) {
         this.couponRepository = couponRepository;
         this.couponIssuer = couponIssuer;
-        this.retries = meterRegistry.counter("coupon.issue.retries");
-        this.retryExhausted = meterRegistry.counter("coupon.issue.retry.exhausted");
-        this.attemptsUntilSuccess = DistributionSummary.builder("coupon.issue.attempts")
+        this.redissonClient = redissonClient;
+        this.lockWait = Timer.builder("coupon.lock.wait")
                 .publishPercentiles(0.5, 0.95, 0.99)
                 .register(meterRegistry);
+        this.lockTimeouts = meterRegistry.counter("coupon.lock.timeout");
     }
 
-    // 바깥에 트랜잭션이 열리면 재시도가 같은 트랜잭션에 참여하고, 커넥션도 내내 붙잡는다.
+    // 락 해제가 커밋보다 앞서면 그 틈에 다른 스레드가 낡은 재고를 읽는다.
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CouponResponse issue(Long campaignId, Long userId) {
-        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-            try {
-                CouponResponse response = couponIssuer.issueOnce(campaignId, userId);
-                attemptsUntilSuccess.record(attempt);
-                return response;
-            } catch (OptimisticLockingFailureException e) {
-                retries.increment();
-            }
+        RLock lock = redissonClient.getLock(LOCK_KEY_PREFIX + campaignId);
+        boolean acquired;
+        long startedAt = System.nanoTime();
+        try {
+            // leaseTime을 주지 않으면 watchdog이 락을 갱신한다. 임계 구역에 DB 쓰기가 있어
+            // 고정 만료를 걸면 작업 도중 락이 풀려 초과 발급이 난다.
+            acquired = lock.tryLock(LOCK_WAIT_SECONDS, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(ErrorCode.ISSUE_LOCK_TIMEOUT);
+        } finally {
+            lockWait.record(System.nanoTime() - startedAt, TimeUnit.NANOSECONDS);
         }
 
-        retryExhausted.increment();
-        throw new BusinessException(ErrorCode.ISSUE_RETRY_EXHAUSTED);
+        if (!acquired) {
+            lockTimeouts.increment();
+            throw new BusinessException(ErrorCode.ISSUE_LOCK_TIMEOUT);
+        }
+
+        try {
+            return couponIssuer.issueOnce(campaignId, userId);
+        } finally {
+            lock.unlock();
+        }
     }
 
     public List<MyCouponResponse> findAvailableCoupons(Long userId) {
