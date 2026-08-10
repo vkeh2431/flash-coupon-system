@@ -16,6 +16,7 @@ public enum ErrorCode {
     CAMPAIGN_CLOSED(HttpStatus.CONFLICT, "CAMPAIGN_CLOSED", "캠페인이 종료되었습니다"),
     CAMPAIGN_PAUSED(HttpStatus.CONFLICT, "CAMPAIGN_PAUSED", "캠페인이 중단되었습니다"),
     CAMPAIGN_OUT_OF_STOCK (HttpStatus.CONFLICT, "CAMPAIGN_OUT_OF_STOCK", "캠페인의 쿠폰이 전부 소진되었습니다"),
+    ISSUE_RETRY_EXHAUSTED(HttpStatus.CONFLICT, "ISSUE_RETRY_EXHAUSTED", "요청이 몰려 발급하지 못했습니다. 다시 시도해 주세요"),
 
     COUPON_ALREADY_ISSUED (HttpStatus.CONFLICT, "COUPON_ALREADY_ISSUED", "캠페인의 쿠폰을 이미 발급받았습니다"),
     COUPON_ALREADY_REDEEMED(HttpStatus.CONFLICT, "COUPON_ALREADY_REDEEMED", "이미 사용한 쿠폰입니다"),

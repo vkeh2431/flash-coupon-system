@@ -1,68 +1,62 @@
 package com.junsoo.coupon.domain.coupon;
 
-import com.junsoo.coupon.domain.campaign.Campaign;
-import com.junsoo.coupon.domain.campaign.CampaignRepository;
-import com.junsoo.coupon.domain.user.User;
-import com.junsoo.coupon.domain.user.UserRepository;
 import com.junsoo.coupon.dto.coupon.CouponResponse;
 import com.junsoo.coupon.dto.coupon.MyCouponResponse;
 import com.junsoo.coupon.global.exception.BusinessException;
 import com.junsoo.coupon.global.exception.ErrorCode;
-import com.junsoo.coupon.global.exception.ResourceNotFoundException;
-import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 
 @Slf4j
 @Service
 @Transactional(readOnly = true)
-@RequiredArgsConstructor
 public class CouponService {
-    private final CampaignRepository campaignRepository;
+
+    private static final int MAX_ATTEMPTS = 50;
+
     private final CouponRepository couponRepository;
-    private final UserRepository userRepository;
+    private final CouponIssuer couponIssuer;
 
-    @Transactional
+    private final Counter retries;
+    private final Counter retryExhausted;
+    private final DistributionSummary attemptsUntilSuccess;
+
+    public CouponService(CouponRepository couponRepository,
+                         CouponIssuer couponIssuer,
+                         MeterRegistry meterRegistry) {
+        this.couponRepository = couponRepository;
+        this.couponIssuer = couponIssuer;
+        this.retries = meterRegistry.counter("coupon.issue.retries");
+        this.retryExhausted = meterRegistry.counter("coupon.issue.retry.exhausted");
+        this.attemptsUntilSuccess = DistributionSummary.builder("coupon.issue.attempts")
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(meterRegistry);
+    }
+
+    // 바깥에 트랜잭션이 열리면 재시도가 같은 트랜잭션에 참여하고, 커넥션도 내내 붙잡는다.
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CouponResponse issue(Long campaignId, Long userId) {
-        int remaining = campaignRepository.findRemainingQuantity(campaignId)
-                .orElseThrow(() -> new ResourceNotFoundException("Campaign", campaignId));
-        if (remaining <= 0) {
-            throw new BusinessException(ErrorCode.CAMPAIGN_OUT_OF_STOCK);
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            try {
+                CouponResponse response = couponIssuer.issueOnce(campaignId, userId);
+                attemptsUntilSuccess.record(attempt);
+                return response;
+            } catch (OptimisticLockingFailureException e) {
+                retries.increment();
+            }
         }
 
-        if (couponRepository.existsByUserIdAndCampaignId(userId, campaignId)) {
-            throw new BusinessException(ErrorCode.COUPON_ALREADY_ISSUED);
-        }
-
-        Campaign campaign = campaignRepository.findByIdForUpdate(campaignId)
-                .orElseThrow(() -> new ResourceNotFoundException("Campaign", campaignId));
-
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime opensAt = campaign.getOpensAt();
-        LocalDateTime closesAt = campaign.getClosesAt();
-        if(now.isBefore(opensAt)) {
-            throw new BusinessException(ErrorCode.CAMPAIGN_NOT_OPENED);
-        }
-        if(now.isAfter(closesAt)) {
-            throw new BusinessException(ErrorCode.CAMPAIGN_CLOSED);
-        }
-
-        if(campaign.isPaused()) throw new BusinessException(ErrorCode.CAMPAIGN_PAUSED);
-
-        if(!campaign.tryDecreaseStock()) {
-            throw new BusinessException(ErrorCode.CAMPAIGN_OUT_OF_STOCK);
-        }
-
-        User user = userRepository.getReferenceById(userId);
-        Coupon coupon = new Coupon(user, campaign);
-        couponRepository.save(coupon);
-
-        return CouponResponse.from(coupon);
+        retryExhausted.increment();
+        throw new BusinessException(ErrorCode.ISSUE_RETRY_EXHAUSTED);
     }
 
     public List<MyCouponResponse> findAvailableCoupons(Long userId) {
