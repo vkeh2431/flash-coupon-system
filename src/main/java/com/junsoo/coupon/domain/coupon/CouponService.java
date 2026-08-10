@@ -29,7 +29,17 @@ public class CouponService {
 
     @Transactional
     public CouponResponse issue(Long campaignId, Long userId) {
-        Campaign campaign = campaignRepository.findById(campaignId)
+        int remaining = campaignRepository.findRemainingQuantity(campaignId)
+                .orElseThrow(() -> new ResourceNotFoundException("Campaign", campaignId));
+        if (remaining <= 0) {
+            throw new BusinessException(ErrorCode.CAMPAIGN_OUT_OF_STOCK);
+        }
+
+        if (couponRepository.existsByUserIdAndCampaignId(userId, campaignId)) {
+            throw new BusinessException(ErrorCode.COUPON_ALREADY_ISSUED);
+        }
+
+        Campaign campaign = campaignRepository.findByIdForUpdate(campaignId)
                 .orElseThrow(() -> new ResourceNotFoundException("Campaign", campaignId));
 
         LocalDateTime now = LocalDateTime.now();
@@ -43,10 +53,6 @@ public class CouponService {
         }
 
         if(campaign.isPaused()) throw new BusinessException(ErrorCode.CAMPAIGN_PAUSED);
-
-        if (couponRepository.existsByUserIdAndCampaignId(userId, campaignId)) {
-            throw new BusinessException(ErrorCode.COUPON_ALREADY_ISSUED);
-        }
 
         if(!campaign.tryDecreaseStock()) {
             throw new BusinessException(ErrorCode.CAMPAIGN_OUT_OF_STOCK);

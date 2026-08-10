@@ -126,15 +126,20 @@ class CouponIssueConcurrencyTest {
 
         // ─────────────── 버전별 단언 ───────────────
         // v0 : 동시성 제어 없음.
-        assertThat(issued)
-                .as("v0에서는 재고를 초과해 발급되어야 한다 — 0건이면 코드가 멀쩡한 게 아니라 "
-                        + "race window를 못 잡은 것이다. USERS/THREADS를 올리고 「검산식 불일치」를 확인할 것")
-                .isGreaterThan(STOCK);
+        // assertThat(issued)
+        //         .as("v0에서는 재고를 초과해 발급되어야 한다 — 0건이면 코드가 멀쩡한 게 아니라 "
+        //                 + "race window를 못 잡은 것이다. USERS/THREADS를 올리고 「검산식 불일치」를 확인할 것")
+        //         .isGreaterThan(STOCK);
 
         // v1~v4
-        // assertThat(issued)
-        //         .as("동시성 제어가 들어간 뒤로는 초과 발급이 0건이어야 한다")
-        //         .isEqualTo(STOCK);
+        assertThat(issued)
+                .as("동시성 제어가 들어간 뒤로는 초과 발급이 0건이어야 한다")
+                .isEqualTo(STOCK);
+
+        Campaign campaign = campaignRepository.findById(campaignId).orElseThrow();
+        assertThat((long) (campaign.getTotalQuantity() - campaign.getRemainingQuantity()))
+                .as("차감이 유실되지 않았다면 재고 감소분과 쿠폰 행 수가 같아야 한다")
+                .isEqualTo(issued);
         // ──────────────────────────────────────────────────────────
     }
 
