@@ -28,24 +28,48 @@ function Reset-Campaign {
 DELETE FROM coupon;
 DELETE FROM campaign;
 ALTER TABLE campaign AUTO_INCREMENT = 1;
-INSERT INTO campaign (name, opens_at, closes_at, total_quantity, remaining_quantity, paused)
-VALUES ('load', NOW() - INTERVAL 1 MINUTE, NOW() + INTERVAL 1 DAY, $Stock, $Stock, 0);
+INSERT INTO campaign (name, opens_at, closes_at, total_quantity, remaining_quantity, paused, version)
+VALUES ('load', NOW() - INTERVAL 1 MINUTE, NOW() + INTERVAL 1 DAY, $Stock, $Stock, 0, 0);
 "@ | Out-Null
 }
 
+# 서버가 발급 경로에 대해 지금까지 낸 응답 수. 재시도 중인 요청은 아직 응답을 내지 않았으므로
+# 이 값이 멈췄다는 것은 서버 안에 살아 있는 요청이 없다는 뜻이다.
+function Get-ServedRequests {
+    try {
+        $text = (Invoke-WebRequest "http://localhost:8080/actuator/prometheus" -UseBasicParsing -TimeoutSec 5).Content
+        $sum = 0
+        foreach ($line in ($text -split "`n")) {
+            if ($line.StartsWith('http_server_requests_seconds_count') -and $line.Contains('/coupons"')) {
+                $sum += [double]($line -split '\s+')[-1]
+            }
+        }
+        return [long]$sum
+    } catch {
+        Write-Host "  경고: 서버 응답 수를 읽지 못했다 — 쿠폰 수만으로 판정한다" -ForegroundColor Yellow
+        return -1
+    }
+}
+
 # k6가 끝나도 서버는 남은 트랜잭션을 계속 처리한다. 여기서 기다리지 않고 세면 진행 중인 건을 놓친다.
+# 쿠폰 수만 보면 안 된다 — 재시도나 대기가 있는 버전은 DB에 아무것도 쓰지 않는 구간이 길어서,
+# 아직 요청이 살아 있는데도 정착으로 오판한다. 그 상태로 리셋하면 이전 실행의 요청이
+# 다음 측정의 재고를 먹는다. 서버가 낸 응답 수까지 같이 멈춰야 정착으로 본다.
 function Wait-Settled {
-    $last = -1
+    $lastCount = -1
+    $lastServed = -1
     $stable = 0
-    for ($i = 0; $i -lt 60; $i++) {
+    for ($i = 0; $i -lt 90; $i++) {
         Start-Sleep -Seconds 2
         $count = [int]((Invoke-Sql "SELECT COUNT(*) FROM coupon;") | Select-Object -First 1)
-        if ($count -eq $last) { $stable++ } else { $stable = 0 }
+        $served = Get-ServedRequests
+        if ($count -eq $lastCount -and $served -eq $lastServed) { $stable++ } else { $stable = 0 }
         if ($stable -ge 2) { return $count }
-        $last = $count
+        $lastCount = $count
+        $lastServed = $served
     }
-    Write-Host "  경고: 120초가 지나도 발급이 멎지 않았다" -ForegroundColor Yellow
-    return $last
+    Write-Host "  경고: 180초가 지나도 요청이 멎지 않았다" -ForegroundColor Yellow
+    return $lastCount
 }
 
 Write-Host ""
