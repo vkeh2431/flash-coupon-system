@@ -14,7 +14,7 @@ if (!STOCK) {
 const BASE_URL = 'http://app:8080';
 const CAMPAIGN_ID = 1;      // 리셋 스크립트가 AUTO_INCREMENT를 되돌려 항상 1로 맞춘다
 const VUS = 5000;           // 동시 요청 수. Tomcat maxConnections(8192) 아래로 잡는다
-const TIMEOUT = '10s';      // 이 값이 곧 실행 시간의 상한이 된다
+const TIMEOUT = '30s';      // 이 값이 곧 실행 시간의 상한이 된다
 
 const tokens = new SharedArray('tokens', () =>
     open('/scripts/tokens.txt').trim().split(/\r?\n/)   // \r이 남으면 Authorization 헤더가 통째로 거부된다
@@ -41,7 +41,7 @@ export const options = {
             executor: 'per-vu-iterations',   // VU 하나가 딱 한 번. 오픈 시각의 수직 상승
             vus: VUS,
             iterations: 1,
-            maxDuration: '60s',              // 타임아웃 10초면 도달할 일이 없다. 안전장치
+            maxDuration: '90s',              // TIMEOUT보다 넉넉해야 한다. 여기 걸리면 꼬리가 잘린다
         },
     },
 };
