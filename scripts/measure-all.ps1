@@ -8,7 +8,8 @@
 param(
     [int]$Stock = 500,
     [int]$Runs = 3,
-    [string]$OutDir = 'k6\results\final'
+    [string]$OutDir = 'k6\results\final',
+    [string[]]$Only
 )
 
 $ErrorActionPreference = 'Stop'
@@ -23,7 +24,7 @@ $versions = [ordered]@{
 }
 
 # src를 통째로 되돌리므로 커밋 안 된 변경은 복구할 수 없다.
-$dirty = git status --porcelain
+$dirty = git status --porcelain -- src build.gradle
 if ($dirty) {
     Write-Host "워킹트리가 깨끗하지 않다. 커밋하거나 stash한 뒤 다시 실행할 것:" -ForegroundColor Red
     $dirty | ForEach-Object { Write-Host "  $_" }
@@ -56,6 +57,8 @@ Write-Host ""
 
 try {
     foreach ($label in $versions.Keys) {
+        if ($Only -and ($Only -notcontains $label)) { continue }
+
         $tag = $versions[$label]
         Write-Host ""
         Write-Host "########## $label ($tag) ##########" -ForegroundColor Yellow
@@ -75,7 +78,6 @@ try {
     }
 } finally {
     Restore-Source
-    docker compose up -d --build app | Out-Null
     Write-Host ""
-    Write-Host "소스를 원복하고 현재 코드로 다시 띄웠다." -ForegroundColor Green
+    Write-Host "소스를 원복했다. 현재 코드로 앱을 띄우려면: docker compose up -d --build app" -ForegroundColor Green
 }
