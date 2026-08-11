@@ -11,8 +11,6 @@ import java.util.Optional;
 
 public interface CouponRepository extends JpaRepository<Coupon, Long> {
 
-    boolean existsByUserIdAndCampaignId(Long userId, Long campaignId);
-
     @Query("select c from Coupon c join fetch c.campaign where c.user.id = :userId and c.status = :status and c.expiresAt > now() ORDER BY c.expiresAt asc")
     List<Coupon> findAvailableByUserId(@Param("userId") Long userId, @Param("status") Status status);
 

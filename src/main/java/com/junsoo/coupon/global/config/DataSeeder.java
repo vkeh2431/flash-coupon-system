@@ -2,6 +2,7 @@ package com.junsoo.coupon.global.config;
 
 import com.junsoo.coupon.domain.campaign.Campaign;
 import com.junsoo.coupon.domain.campaign.CampaignRepository;
+import com.junsoo.coupon.domain.campaign.IssueGate;
 import com.junsoo.coupon.domain.user.Role;
 import com.junsoo.coupon.domain.user.User;
 import com.junsoo.coupon.domain.user.UserRepository;
@@ -28,6 +29,7 @@ public class DataSeeder implements CommandLineRunner {
 
     private final UserRepository userRepository;
     private final CampaignRepository campaignRepository;
+    private final IssueGate issueGate;
     private final PasswordEncoder passwordEncoder;
 
     @Value("${app.seed.admin-email:admin@coupon.local}")
@@ -61,9 +63,16 @@ public class DataSeeder implements CommandLineRunner {
 
         // 절대 날짜로 박으면 시간이 지나 전부 '종료' 상태가 되므로 현재 시각 기준 상대값으로 만든다.
         LocalDateTime now = LocalDateTime.now();
-        campaignRepository.save(new Campaign("진행중 캠페인", now.minusDays(1), now.plusDays(30), 100));
-        campaignRepository.save(new Campaign("예정 캠페인", now.plusDays(7), now.plusDays(14), 50));
-        campaignRepository.save(new Campaign("종료 캠페인", now.minusDays(30), now.minusDays(1), 30));
+        seed(new Campaign("진행중 캠페인", now.minusDays(1), now.plusDays(30), 100));
+        seed(new Campaign("예정 캠페인", now.plusDays(7), now.plusDays(14), 50));
+        seed(new Campaign("종료 캠페인", now.minusDays(30), now.minusDays(1), 30));
         log.info("[seed] 테스트 캠페인 3건 생성 (진행중 / 예정 / 종료)");
+    }
+
+    // DB는 ddl-auto로 비워지지만 Redis는 앱을 재기동해도 남는다.
+    // initialize가 이전 실행의 발급 이력까지 지운다.
+    private void seed(Campaign campaign) {
+        campaignRepository.save(campaign);
+        issueGate.initialize(campaign);
     }
 }

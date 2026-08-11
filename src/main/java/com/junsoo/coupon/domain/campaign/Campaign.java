@@ -53,15 +53,6 @@ public class Campaign {
         this.paused = false;
     }
 
-    public boolean tryDecreaseStock() {
-        if(this.remainingQuantity <= 0) {
-            return false;
-        } else {
-            this.remainingQuantity -= 1;
-            return true;
-        }
-    }
-
     public void pause() {
         this.paused = true;
     }

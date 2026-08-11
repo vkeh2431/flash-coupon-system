@@ -3,6 +3,7 @@ package com.junsoo.coupon.domain.coupon;
 import com.junsoo.coupon.TestcontainersConfiguration;
 import com.junsoo.coupon.domain.campaign.Campaign;
 import com.junsoo.coupon.domain.campaign.CampaignRepository;
+import com.junsoo.coupon.domain.campaign.IssueGate;
 import com.junsoo.coupon.domain.user.Role;
 import com.junsoo.coupon.domain.user.User;
 import com.junsoo.coupon.domain.user.UserRepository;
@@ -42,6 +43,8 @@ class CouponIssueConcurrencyTest {
     @Autowired
     private CouponService couponService;
     @Autowired
+    private IssueGate issueGate;
+    @Autowired
     private CampaignRepository campaignRepository;
     @Autowired
     private UserRepository userRepository;
@@ -60,6 +63,8 @@ class CouponIssueConcurrencyTest {
         LocalDateTime now = LocalDateTime.now();
         Campaign campaign = new Campaign("동시성 테스트", now.minusMinutes(1), now.plusHours(1), STOCK);
         campaignId = campaignRepository.save(campaign).getId();
+        // 캠페인 생성 API를 거치지 않으므로 게이트를 직접 연다. 이게 없으면 전 요청이 NOT_FOUND다.
+        issueGate.initialize(campaign);
 
         // 비밀번호는 인코딩하지 않는다 — 이 테스트는 로그인을 거치지 않고 서비스를 직접 호출한다.
         // 측정 대상이 아닌 준비물에 BCrypt 비용을 낼 이유가 없다.
@@ -137,8 +142,8 @@ class CouponIssueConcurrencyTest {
                 .isEqualTo(STOCK);
 
         Campaign campaign = campaignRepository.findById(campaignId).orElseThrow();
-        assertThat((long) (campaign.getTotalQuantity() - campaign.getRemainingQuantity()))
-                .as("차감이 유실되지 않았다면 재고 감소분과 쿠폰 행 수가 같아야 한다")
+        assertThat((long) (campaign.getTotalQuantity() - issueGate.remainingStock(campaignId)))
+                .as("게이트를 통과한 수와 쿠폰 행 수가 같아야 한다 — 다르면 그 차이가 drift다")
                 .isEqualTo(issued);
         // ──────────────────────────────────────────────────────────
     }
@@ -148,7 +153,7 @@ class CouponIssueConcurrencyTest {
         Campaign campaign = campaignRepository.findById(campaignId).orElseThrow();
         long issued = couponRepository.count();
         int total = campaign.getTotalQuantity();
-        int remaining = campaign.getRemainingQuantity();
+        int redisStock = issueGate.remainingStock(campaignId);
 
         System.out.printf("""
 
@@ -157,14 +162,14 @@ class CouponIssueConcurrencyTest {
                   성공         : %d
                   실패         : %d
                 재고(total)    : %d
-                재고(remaining): %d
+                재고(Redis)    : %d
                 COUNT(*)       : %d
                 ---------------------------
                 초과 발급      : %d   (COUNT(*) - total)
-                검산식 불일치  : %d   (total - remaining - COUNT(*), 0이어야 정상)
+                drift          : %d   (total - Redis 재고 - COUNT(*), 0이어야 정상)
                 ===========================
                 %n""",
-                USERS, THREADS, success, failure, total, remaining, issued,
-                issued - total, (long) (total - remaining) - issued);
+                USERS, THREADS, success, failure, total, redisStock, issued,
+                issued - total, (long) (total - redisStock) - issued);
     }
 }
