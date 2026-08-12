@@ -15,4 +15,6 @@ public interface CouponRepository extends JpaRepository<Coupon, Long> {
     List<Coupon> findAvailableByUserId(@Param("userId") Long userId, @Param("status") Status status);
 
     Optional<Coupon> findByIdAndUserId(Long id, Long userId);
+
+    Optional<Coupon> findByUserIdAndCampaignId(Long userId, Long campaignId);
 }

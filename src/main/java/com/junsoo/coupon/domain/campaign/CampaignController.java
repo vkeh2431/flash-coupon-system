@@ -1,6 +1,7 @@
 package com.junsoo.coupon.domain.campaign;
 
 import com.junsoo.coupon.domain.coupon.CouponService;
+import com.junsoo.coupon.domain.coupon.IssueOutcome;
 import com.junsoo.coupon.dto.campaign.CampaignResponse;
 import com.junsoo.coupon.dto.coupon.CouponResponse;
 import com.junsoo.coupon.global.security.AuthUser;
@@ -24,8 +25,9 @@ public class CampaignController {
             @PathVariable Long campaignId,
             @AuthenticationPrincipal AuthUser principal
             ) {
-        CouponResponse response = couponService.issue(campaignId, principal.getUserId());
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        IssueOutcome outcome = couponService.issue(campaignId, principal.getUserId());
+        HttpStatus status = outcome.created() ? HttpStatus.CREATED : HttpStatus.OK;
+        return ResponseEntity.status(status).body(outcome.coupon());
     }
 
     @GetMapping

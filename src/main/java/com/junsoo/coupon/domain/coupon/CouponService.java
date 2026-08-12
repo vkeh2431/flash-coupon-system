@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 
 @Slf4j
@@ -30,6 +31,7 @@ public class CouponService {
     private final IssueGate issueGate;
 
     private final Timer gateDuration;
+    private final Counter replayMissing;
     private final Map<IssueResult, Counter> gateResults = new EnumMap<>(IssueResult.class);
 
     public CouponService(CouponRepository couponRepository,
@@ -42,6 +44,7 @@ public class CouponService {
         this.gateDuration = Timer.builder("coupon.gate.duration")
                 .publishPercentiles(0.5, 0.95, 0.99)
                 .register(meterRegistry);
+        this.replayMissing = meterRegistry.counter("coupon.replay.missing");
         for (IssueResult result : IssueResult.values()) {
             gateResults.put(result, Counter.builder("coupon.gate.result")
                     .tag("result", result.name())
@@ -50,15 +53,29 @@ public class CouponService {
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public CouponResponse issue(Long campaignId, Long userId) {
+    public IssueOutcome issue(Long campaignId, Long userId) {
         IssueResult result = gateDuration.record(() -> issueGate.tryIssue(campaignId, userId));
         gateResults.get(result).increment();
 
+        if (result == IssueResult.ALREADY_ISSUED) {
+            return replay(campaignId, userId);
+        }
         if (result != IssueResult.OK) {
             throw toException(campaignId, result);
         }
 
-        return couponIssuer.insert(campaignId, userId);
+        return new IssueOutcome(couponIssuer.insert(campaignId, userId), true);
+    }
+
+    // 게이트는 Redis Set만 보고 판정하므로 쿠폰을 모른다. 이 경로에서만 DB를 한 번 본다.
+    private IssueOutcome replay(Long campaignId, Long userId) {
+        Optional<Coupon> coupon = couponRepository.findByUserIdAndCampaignId(userId, campaignId);
+        if (coupon.isEmpty()) {
+            // 게이트 통과와 INSERT 커밋 사이이거나, INSERT가 끝내 실패해 쿠폰이 없다.
+            replayMissing.increment();
+            throw new BusinessException(ErrorCode.COUPON_ALREADY_ISSUED);
+        }
+        return new IssueOutcome(CouponResponse.from(coupon.get()), false);
     }
 
     private RuntimeException toException(Long campaignId, IssueResult result) {
@@ -67,8 +84,8 @@ public class CouponService {
             case NOT_OPENED -> new BusinessException(ErrorCode.CAMPAIGN_NOT_OPENED);
             case CLOSED -> new BusinessException(ErrorCode.CAMPAIGN_CLOSED);
             case PAUSED -> new BusinessException(ErrorCode.CAMPAIGN_PAUSED);
-            case ALREADY_ISSUED -> new BusinessException(ErrorCode.COUPON_ALREADY_ISSUED);
             case OUT_OF_STOCK -> new BusinessException(ErrorCode.CAMPAIGN_OUT_OF_STOCK);
+            case ALREADY_ISSUED -> new IllegalStateException("ALREADY_ISSUED는 앞에서 처리한다");
             case OK -> new IllegalStateException("OK는 예외로 변환하지 않는다");
         };
     }
