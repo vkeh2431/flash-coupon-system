@@ -1,8 +1,14 @@
 package com.junsoo.coupon.global.config;
 
 
+import com.junsoo.coupon.global.ratelimit.RateLimitFilter;
+import com.junsoo.coupon.global.ratelimit.RateLimitProperties;
+import com.junsoo.coupon.global.ratelimit.RateLimiter;
 import com.junsoo.coupon.global.security.*;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,7 +25,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({JwtProperties.class, RateLimitProperties.class})
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -27,6 +33,10 @@ public class SecurityConfig {
     private final CustomUserDetailsService userDetailsService;
     private final RestAuthenticationEntryPoint authenticationEntryPoint;
     private final RestAccessDeniedHandler restAccessDeniedHandler;
+    private final ObjectProvider<RateLimiter> rateLimiter;
+    private final RateLimitProperties rateLimitProperties;
+    private final ObjectMapper objectMapper;
+    private final MeterRegistry meterRegistry;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -43,13 +53,19 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(restAccessDeniedHandler))
-                .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(rateLimitFilter(), JwtAuthenticationFilter.class);
         return http.build();
     }
 
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter() {
         return new JwtAuthenticationFilter(jwtProvider);
+    }
+
+    @Bean
+    public RateLimitFilter rateLimitFilter() {
+        return new RateLimitFilter(rateLimiter, rateLimitProperties, objectMapper, meterRegistry);
     }
 
     @Bean

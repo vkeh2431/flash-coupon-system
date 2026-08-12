@@ -11,6 +11,7 @@ public enum ErrorCode {
     VALIDATION_ERROR(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "입력값 검증에 실패했습니다"),
     FORBIDDEN(HttpStatus.FORBIDDEN, "FORBIDDEN", "권한이 없습니다"),
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "인증이 필요합니다"),
+    TOO_MANY_REQUESTS(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_REQUESTS", "요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요"),
 
     CAMPAIGN_NOT_OPENED(HttpStatus.CONFLICT, "CAMPAIGN_NOT_OPENED", "캠페인이 아직 열리지 않았습니다"),
     CAMPAIGN_CLOSED(HttpStatus.CONFLICT, "CAMPAIGN_CLOSED", "캠페인이 종료되었습니다"),
