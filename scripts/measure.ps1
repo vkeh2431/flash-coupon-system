@@ -8,6 +8,7 @@ param(
     [int]$Run = 1,
     [int]$Stock = 500,
     [string]$OutDir = 'k6\results',
+    [string]$Script = 'issue.js',
     [switch]$SkipWarmup
 )
 
@@ -103,7 +104,7 @@ if (-not $SkipWarmup) {
     for ($w = 1; $w -le $WARMUP_RUNS; $w++) {
         Write-Host "[1/4] 워밍업 $w/$WARMUP_RUNS (JIT 예열 — 기록하지 않음)"
         Reset-Campaign
-        docker compose --profile load run --rm -e STOCK=$Stock k6 run /scripts/issue.js | Out-Null
+        docker compose --profile load run --rm -e STOCK=$Stock k6 run "/scripts/$Script" | Out-Null
         if ($LASTEXITCODE -ne 0) { Write-Host "  워밍업 k6 종료 코드 $LASTEXITCODE" -ForegroundColor Yellow }
         Wait-Settled | Out-Null
     }
@@ -114,7 +115,7 @@ Reset-Campaign
 
 Write-Host "[3/4] 측정"
 # k6 요약은 stdout으로 나온다. 진행 로그와 경고는 stderr라 파일에 섞이지 않는다.
-docker compose --profile load run --rm -e STOCK=$Stock k6 run /scripts/issue.js |
+docker compose --profile load run --rm -e STOCK=$Stock k6 run "/scripts/$Script" |
     Set-Content $resultFile -Encoding utf8
 if ($LASTEXITCODE -ne 0) { Write-Host "  k6 종료 코드 $LASTEXITCODE — 요약을 확인할 것" -ForegroundColor Yellow }
 
