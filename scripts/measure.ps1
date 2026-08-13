@@ -7,6 +7,8 @@ param(
     [Parameter(Mandatory = $true)][string]$Version,
     [int]$Run = 1,
     [int]$Stock = 500,
+    [int]$Rate = 0,
+    [int]$MaxVus = 0,
     [string]$OutDir = 'k6\results',
     [string]$Script = 'issue.js',
     [switch]$SkipWarmup
@@ -21,7 +23,19 @@ $ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent $PSScriptRoot
 $resultDir = Join-Path $root $OutDir
 if (-not (Test-Path $resultDir)) { New-Item -ItemType Directory -Path $resultDir | Out-Null }
-$resultFile = Join-Path $resultDir "$Version-stock$Stock-run$Run.txt"
+# Rate는 도착률 기반 스크립트(issue-arrival.js)에만 쓴다.
+# 넘기지 않으면 인자도 파일명도 예전과 동일해서 v0~v4 재현이 그대로 성립한다.
+$k6Env = @('-e', "STOCK=$Stock")
+$label = "stock$Stock"
+if ($Rate -gt 0) {
+    $k6Env += @('-e', "RATE=$Rate")
+    $label = "stock$Stock-rate$Rate"
+}
+# maxVUs는 in-flight 예산이다. RATE × 실제 iteration_duration을 밑돌면 드롭이 나고,
+# 그 순간 도착률이 RATE가 아니라 maxVUs ÷ 응답시간이 되어 열린 루프가 성립하지 않는다.
+if ($MaxVus -gt 0) { $k6Env += @('-e', "MAX_VUS=$MaxVus") }
+$runArgs = @('compose', '--profile', 'load', 'run', '--rm') + $k6Env + @('k6', 'run', "/scripts/$Script")
+$resultFile = Join-Path $resultDir "$Version-$label-run$Run.txt"
 
 function Invoke-Sql {
     param([string]$Sql)
@@ -98,13 +112,15 @@ Write-Host "  IntelliJ / 브라우저 등 백그라운드 앱 종료"
 Write-Host "  전원 어댑터 연결 + 고성능 모드"
 Write-Host "  확인되지 않았다면 지금 중단하고(Ctrl+C) 정리 후 다시 실행할 것"
 Write-Host ""
-Write-Host "=== $Version / 재고 $Stock / $Run 회차 ===" -ForegroundColor Cyan
+$rateLabel = if ($Rate -gt 0) { " / 도착률 $Rate/s" } else { "" }
+$vuLabel = if ($MaxVus -gt 0) { " / maxVUs $MaxVus" } else { "" }
+Write-Host "=== $Version / 재고 $Stock$rateLabel$vuLabel / $Run 회차 ===" -ForegroundColor Cyan
 
 if (-not $SkipWarmup) {
     for ($w = 1; $w -le $WARMUP_RUNS; $w++) {
         Write-Host "[1/4] 워밍업 $w/$WARMUP_RUNS (JIT 예열 — 기록하지 않음)"
         Reset-Campaign
-        docker compose --profile load run --rm -e STOCK=$Stock k6 run "/scripts/$Script" | Out-Null
+        docker @runArgs | Out-Null
         if ($LASTEXITCODE -ne 0) { Write-Host "  워밍업 k6 종료 코드 $LASTEXITCODE" -ForegroundColor Yellow }
         Wait-Settled | Out-Null
     }
@@ -114,13 +130,23 @@ Write-Host "[2/4] 리셋"
 Reset-Campaign
 
 Write-Host "[3/4] 측정"
+# 측정 직전/직후의 앱 요청 카운터. 차분이 「실제로 앱까지 들어온 요청 수」다.
+# k6가 보낸 수와의 차이는 Tomcat maxConnections를 넘어 커널이 accept 단에서 버린 분량이고,
+$servedBefore = Get-ServedRequests
 # k6 요약은 stdout으로 나온다. 진행 로그와 경고는 stderr라 파일에 섞이지 않는다.
-docker compose --profile load run --rm -e STOCK=$Stock k6 run "/scripts/$Script" |
+docker @runArgs |
     Set-Content $resultFile -Encoding utf8
 if ($LASTEXITCODE -ne 0) { Write-Host "  k6 종료 코드 $LASTEXITCODE — 요약을 확인할 것" -ForegroundColor Yellow }
 
 Write-Host "[4/4] 정착 대기 후 검산"
 $coupons = Wait-Settled
+$servedAfter = Get-ServedRequests
+
+$sentMatch = [regex]::Match((Get-Content $resultFile -Raw), 'http_reqs\.+:\s+(\d+)')
+$sent = if ($sentMatch.Success) { [int]$sentMatch.Groups[1].Value } else { 0 }
+$reached = if ($servedBefore -ge 0 -and $servedAfter -ge 0) { $servedAfter - $servedBefore } else { -1 }
+$missed = if ($sent -gt 0 -and $reached -ge 0) { $sent - $reached } else { 0 }
+$missedPct = if ($sent -gt 0 -and $reached -gt 0) { [math]::Round(100.0 * $missed / $sent, 1) } else { 0 }
 
 # 차감이 일어나는 곳이 버전마다 다르다. v0~v3는 DB 재고가, v4는 Redis 재고가 줄어든다.
 # 둘 다 출력하고 해당하는 쪽을 읽는다 — 해당 없는 쪽은 -COUNT(*)가 나온다.
@@ -147,6 +173,10 @@ COUNT(*)            : $($f[2])
 불일치 · DB 기준    : $($f[4])   v0~v3용 (lost update)
 불일치 · Redis 기준 : $redisMismatch   v4용 (drift)
 발급 시간 폭        : $($f[5]) 초
+----------------
+k6 발신             : $sent
+앱 도달             : $reached
+앱 미도달           : $missed   ($missedPct%)   커널 accept 단에서 잘림
 ================
 "@
 
